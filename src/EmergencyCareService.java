@@ -1,4 +1,5 @@
 import java.util.ArrayList;
+import java.util.concurrent.Semaphore;
 
 public class EmergencyCareService {
 	
@@ -7,36 +8,40 @@ public class EmergencyCareService {
 	private ArrayList<Patient>  patientsInWaitingRoomWithOutPaper;
 	private ArrayList<Patient>  patientsInWaitingRoomWithPaper;
 	private ArrayList<Patient> patientsWaitingIntheirRooms;
-	private int nurses = 0;
-	private int rooms = 0;
-	private int physicians = 0;
+	private Semaphore physiciansSemaphore;
+	private Semaphore roomsSemaphore;
+	private Semaphore nursesSemaphore;
 	
 	
 	public EmergencyCareService() {
-		newPatients = new ArrayList<Patient>();
-		patientsInWaitingRoomWithOutPaper = new ArrayList<Patient>();
-		patientsInWaitingRoomWithPaper = new ArrayList<Patient>();
-		patientsWaitingIntheirRooms = new ArrayList<Patient>();
+		this.newPatients = new ArrayList<Patient>();
+		this.patientsInWaitingRoomWithOutPaper = new ArrayList<Patient>();
+		this.patientsInWaitingRoomWithPaper = new ArrayList<Patient>();
+		this.patientsWaitingIntheirRooms = new ArrayList<Patient>();
+		this.physiciansSemaphore =  new Semaphore(0);
+		this.roomsSemaphore =  new Semaphore(0);
+		this.nursesSemaphore =  new Semaphore(0);
 	}
 	
 	// Add a new patient in the service
-	public void addNewPatient(Patient patient) {
-		this.newPatients.add(patient);
+	public boolean addNewPatient(Patient patient) {
+		System.out.println(patient + " arrived at the hospital");
+		return this.newPatients.add(patient);
 	}
 	
 	// Add a new room in the service
 	public void addRoom() {
-		this.rooms++;
+		this.roomsSemaphore.release();
 	}
 	
 	// Add a new room in the service
-		public void addNurse() {
-			this.nurses++;
-		}
+	public void addNurse() {
+		this.nursesSemaphore.release();
+	}
 	
 	// Add a physician in the service
 	public void addPhysician() {
-		this.physicians++;
+		this.physiciansSemaphore.release();
 	}
 	
 	// Check in of a patient,  return true if patient exist, false if not
@@ -70,65 +75,73 @@ public class EmergencyCareService {
 	}
 	
 	// Nurse processing a patient paper, return true if done and false if not done
-	public boolean nurseProcessPatientPaper(Patient patient) {
-		// TODO semaphore pour les nurses ?
-		if (this.nurses > 0) {
-			this.nurses--;
-			
-			System.out.println("The nurse process " + patient + "'s paper");
-			this.patientsInWaitingRoomWithOutPaper.remove(patient);
-			
-			this.patientsInWaitingRoomWithPaper.add(patient);
-			return true;
+	public boolean nurseProcessPatientPaper(Patient patient) throws InterruptedException {
+		// Wait for a nurse
+		while(!this.nursesSemaphore.tryAcquire()) {
+			System.out.println(patient + " is waiting for a nurse");
+			// Wait 2 secondes before try to redemand for a physician
+			Thread.sleep(2 * 1000);
 		}
-		else {
-			System.out.println("There is no nurse available");
-			return false;
-		}
+		
+		System.out.println("The nurse process " + patient + "'s paper");
+		this.patientsInWaitingRoomWithOutPaper.remove(patient);
+		
+		this.patientsInWaitingRoomWithPaper.add(patient);
+		
+		return true;
 	}
 	
 	
 	// Try to put a patient in a room
-	public boolean patientGoToHisRoom(Patient patient) {
-		if (this.rooms > 0) {
-			this.rooms--;
-			this.patientsInWaitingRoomWithPaper.remove(patient);
-			System.out.println(patient + " goes to his room");
-			this.patientsWaitingIntheirRooms.add(patient);
-			this.nurses++;
-			return true;
+	public boolean patientGoToHisRoom(Patient patient) throws InterruptedException {
+		// Wait for a nurse
+		while(!this.roomsSemaphore.tryAcquire()) {
+			System.out.println(patient + " is waiting for a room");
+			// Wait 2 secondes before try to redemand for a physician
+			Thread.sleep(2 * 1000);
 		}
-		else {
-			System.out.println("There is no room available");
-			return false;
-		}
+		
+		this.patientsInWaitingRoomWithPaper.remove(patient);
+		System.out.println(patient + " goes to his room");
+		this.patientsWaitingIntheirRooms.add(patient);
+		
+		// Release nurse
+		this.nursesSemaphore.release();
+		
+		return true;
 	}
 	
 	
 	// When we try to examine a patient by a physician
-	public boolean physicianExaminePatient(Patient patient) {
-		if (this.physicians > 0) {
-			this.physicians--;
-			System.out.println(patient + " is examined by a physician");
-			patient.cure();
-			
-			if(patient.isCured()) System.out.println(patient + " is cured");
-			else System.out.println(patient + " is not cured");
-			
-			this.physicians++;
-			return true;
+	public boolean physicianExaminePatient(Patient patient) throws InterruptedException {
+		
+		// Wait for a physician
+		while(!this.physiciansSemaphore.tryAcquire()) {
+			System.out.println(patient + " is waiting for a physician");
+			// Wait 2 secondes before try to redemand for a physician
+			Thread.sleep(2 * 1000);
 		}
-		else {
-			System.out.println("There is no Physician available");
-			return false;
-		}
+		
+		System.out.println(patient + " is examined by a physician");
+		
+		// Time to examine a patient
+		Thread.sleep(3 * 1000);
+		patient.cure();
+		
+		if(patient.isCured()) System.out.println(patient + " is cured");
+		else System.out.println(patient + " is not cured");
+		
+		// Release physician
+		this.physiciansSemaphore.release();
+		
+		return true;
 	}
 	
 	
 	// When a patient check out
 	public boolean patientCheckOut(Patient patient) {
 		System.out.println(patient + " check out and leave");
-		this.rooms++;
+		this.roomsSemaphore.release();
 		return true;
 	}
 	

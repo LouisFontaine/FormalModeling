@@ -8,6 +8,10 @@ public class Patient {
 		this.cured = cured;
 	}
 	
+	public boolean joinHospital(EmergencyCareService esc) {
+		return esc.addNewPatient(this);
+	}
+	
 	public boolean isCured() {
 		return cured;
 	}
