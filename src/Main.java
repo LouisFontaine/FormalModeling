@@ -12,15 +12,11 @@ public class Main {
 	    	EmergencyCareService service1 = new EmergencyCareService("Service 1", resourceProvider);
 	    	service1.addNurse();
 	    	service1.addRoom();
-	    	service1.addRoom();
-	    	service1.addRoom();
 	    	service1.addPhysician();
 	    	
 	    	// Create an emergency care service with 2 nurse, 0 room and 1 physician
 	    	EmergencyCareService service2 = new EmergencyCareService("Service 2", resourceProvider);
 	    	service2.addNurse();
-	    	service2.addNurse();
-	    	service2.addPhysician();
 	    	
 	    	// Create 2 patients
 	    	
@@ -83,7 +79,6 @@ public class Main {
 			    	
 			    } 
 			};
-			
 			// Patient 1 join service 1
 			patient1Admission.start();
 			// Patient 1 join service 1

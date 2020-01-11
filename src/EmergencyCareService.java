@@ -21,12 +21,13 @@ public class EmergencyCareService {
 		this.patientsInWaitingRoomWithOutPaper = new ArrayList<Patient>();
 		this.patientsInWaitingRoomWithPaper = new ArrayList<Patient>();
 		this.patientsWaitingIntheirRooms = new ArrayList<Patient>();
-		this.physiciansSemaphore =  new Semaphore(0, true);
-		this.roomsSemaphore =  new Semaphore(0, true);
-		this.nursesSemaphore =  new Semaphore(0, true);
+		this.physiciansSemaphore =  new Semaphore(0);
+		this.roomsSemaphore =  new Semaphore(0);
+		this.nursesSemaphore =  new Semaphore(0);
 		this.launchSendEmptyRoomService();
+		this.launchSendNonWorkingPhysicianService();
 	}
-	
+
 	// Add a new patient in the service and make it take in chanrge by the ECS
 	public boolean addNewPatient(Patient patient) throws InterruptedException {
 		System.out.println("[" + this.ECSName + "] " + patient + " arrived at the hospital");
@@ -109,14 +110,15 @@ public class EmergencyCareService {
 	// Try to put a patient in a room
 	public boolean patientGoToHisRoom(Patient patient) throws InterruptedException {
 		
+		System.out.println("[" + this.ECSName + "] " + patient + " is waiting for a room");
+		
 		// Wait for a nurse
 		while(!this.roomsSemaphore.tryAcquire()) {
-			System.out.println("[" + this.ECSName + "] " + patient + " is waiting for a room");
 			
 			this.askRoomToProvider();
 			
 			// Wait 1 secondes before try to redemand for a room
-			Thread.sleep(1 * 1000);
+			Thread.sleep(1000);
 		}
 		
 		this.patientsInWaitingRoomWithPaper.remove(patient);
@@ -137,16 +139,16 @@ public class EmergencyCareService {
 		    public void run() {
 		    	
 		    	try {
-		    		System.out.println("[" + ECSName + "] " + "is Asking Ressource Provider for a room");
+		    		//System.out.println("[" + ECSName + "] " + "is Asking Ressource Provider for a room");
 		    		
 					if (resourceProvider.giveRoom(ECSName)) {
 						
 						// Add a new room to the service
 						roomsSemaphore.release();
-						System.out.println("[" + ECSName + "] " + "Room received from [Ressource provider]");
+						//System.out.println("[" + ECSName + "] " + "Room received from [Ressource provider]");
 					}
 					else {
-						System.out.println("[" + ECSName + "] " + "Ressource Provider couldn't get a room");
+						//System.out.println("[" + ECSName + "] " + "Ressource Provider couldn't get a room");
 					}
 				} catch (InterruptedException e) {
 					e.printStackTrace();
@@ -161,9 +163,14 @@ public class EmergencyCareService {
 	// When we try to examine a patient by a physician
 	public boolean physicianExaminePatient(Patient patient) throws InterruptedException {
 		
+		System.out.println("[" + this.ECSName + "] " + patient + " is waiting for a physician");
+		
 		// Wait for a physician
 		while(!this.physiciansSemaphore.tryAcquire()) {
-			System.out.println("[" + this.ECSName + "] " + patient + " is waiting for a physician");
+			
+			
+			this.askPhysicianToProvider();
+			
 			// Wait 2 secondes before try to redemand for a physician
 			Thread.sleep(2 * 1000);
 		}
@@ -184,13 +191,43 @@ public class EmergencyCareService {
 	}
 	
 	
+	private void askPhysicianToProvider() {
+		Thread askPhysician = new Thread() { 
+			
+		    @Override 
+		    public void run() {
+		    	
+		    	try {
+		    		// System.out.println("[" + ECSName + "] " + "is Asking Ressource Provider for a physician");
+		    		
+					if (resourceProvider.givePhysician(ECSName)) {
+						
+						// Add a new room to the service
+						physiciansSemaphore.release();
+						// System.out.println("[" + ECSName + "] " + "Physician received from [Ressource provider]");
+					}
+					else {
+						// System.out.println("[" + ECSName + "] " + "Ressource Provider couldn't get a Physician");
+					}
+				} catch (InterruptedException e) {
+					e.printStackTrace();
+				}
+		    	
+		    } 
+		};
+		askPhysician.start();
+		
+	}
+
 	// When a patient check out
 	public boolean patientCheckOut(Patient patient) {
 		System.out.println("[" + this.ECSName + "] " + patient + " checked out and leave");
+		this.patientsWaitingIntheirRooms.remove(patient);
 		this.roomsSemaphore.release();
 		return true;
 	}
 	
+	// Async function that will permenently check and send free rooms when there is no patient in the service
 	public void launchSendEmptyRoomService() {
 		Thread SendEmptyRoomService = new Thread() { 
 			
@@ -205,14 +242,14 @@ public class EmergencyCareService {
 						Thread.sleep(1000);
 						
 						/*
-						 * If there are less patient without room in the hospital than room available, 
+						 * If there is no patient in the service, 
 						 * it means that we cans send a room to the ressource provider
 						 */
-						if (newPatients.size() + patientsInWaitingRoomWithOutPaper.size() + patientsInWaitingRoomWithPaper.size() 
-							+ patientsWaitingIntheirRooms.size() > 0) {
+						if ((newPatients.size() + patientsInWaitingRoomWithOutPaper.size() + patientsInWaitingRoomWithPaper.size() 
+							+ patientsWaitingIntheirRooms.size()) == 0) {
 							
 							// We take a room from this service
-							roomsSemaphore.acquire();	
+							roomsSemaphore.acquire();
 							System.out.println("[" + ECSName + "] Sent a room to [Ressource provider]");
 							
 							// And we send this room to the ressource provider
@@ -228,6 +265,47 @@ public class EmergencyCareService {
 		    } 
 		};
 		SendEmptyRoomService.start();
+	}
+	
+	// Async function that will permenently check and send non occupied physicians when there is no patient in the service
+	private void launchSendNonWorkingPhysicianService() {
+		Thread SendEmptyRoomService = new Thread() { 
+			
+		    @Override 
+		    public void run() {
+		    	
+		    	
+		    	while(true) {
+		    		// Check and send empty rooms to the provider every second 
+		    		try {
+		    			
+						Thread.sleep(1000);
+						
+						/*
+						 * If there is no patient in the service, 
+						 * it means that we cans send a room to the ressource provider
+						 */
+						if ((newPatients.size() + patientsInWaitingRoomWithOutPaper.size() + patientsInWaitingRoomWithPaper.size() 
+							+ patientsWaitingIntheirRooms.size()) == 0) {
+							
+							// We take a room from this service
+							physiciansSemaphore.acquire();
+							System.out.println("[" + ECSName + "] Sent a physician to [Ressource provider]");
+							
+							// And we send this room to the ressource provider
+							resourceProvider.receivePhysician(ECSName);
+							
+						}
+						
+					} catch (InterruptedException e) {
+						e.printStackTrace();
+					}
+		    	}
+		    	
+		    } 
+		};
+		SendEmptyRoomService.start();
+		
 	}
 	
 }
