@@ -8,7 +8,7 @@ public class Patient {
 		this.cured = cured;
 	}
 	
-	public boolean joinHospital(EmergencyCareService esc) {
+	public boolean joinHospital(EmergencyCareService esc) throws InterruptedException {
 		return esc.addNewPatient(this);
 	}
 	
