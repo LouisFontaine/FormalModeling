@@ -32,10 +32,15 @@ public class EmergencyCareService {
 	public boolean addNewPatient(Patient patient) throws InterruptedException {
 		System.out.println("[" + this.ECSName + "] " + patient + " arrived at the hospital");
 		this.newPatients.add(patient);
+		Thread.sleep(1000);
 		this.patientCheckIn(patient);
+		Thread.sleep(1000);
     	this.patientFillPaper(patient);
-    	this.nurseProcessPatientPaper(patient);	    	
+    	Thread.sleep(1000);
+    	this.nurseProcessPatientPaper(patient);	 
+    	Thread.sleep(1000);
     	this.patientGoToHisRoom(patient);
+    	Thread.sleep(1000);
     	this.physicianExaminePatient(patient);
     	this.patientCheckOut(patient);
     	return true;
